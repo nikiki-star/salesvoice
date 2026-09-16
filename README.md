@@ -48,7 +48,7 @@ SalesVoice 回答的是「**这个客户是什么样的人，我下次该怎么�
 ## 快速开始
 
 ```bash
-git clone https://github.com/<your-account>/salesvoice.git
+git clone https://github.com/nikiki-star/salesvoice.git
 cd salesvoice
 
 # 1) 建环境（需要 Python 3.10+；用 uv 最快）

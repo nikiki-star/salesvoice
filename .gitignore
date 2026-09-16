@@ -1,0 +1,26 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# ---- 本机模型权重（首次运行由 setup_models 下载，约 240MB int8）----
+models/
+
+# ---- 运行时数据：SQLite 库、转录文本、上传的录音 ----
+# 客户情报属于敏感个人信息，绝不入库到版本控制
+data/
+
+# ---- 编辑器 / 系统 ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ---- 测试产出的临时音频 ----
+tests/*.aiff
+tests/*.16k.wav

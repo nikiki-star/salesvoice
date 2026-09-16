@@ -1,0 +1,48 @@
+[project]
+name = "salesvoice"
+version = "0.1.0"
+description = "客户语音情报中台 —— 从销售会面录音提炼客户画像、雷区与行动建议"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "SalesVoice contributors" }]
+keywords = ["speech-recognition", "sales-intelligence", "crm", "asr", "llm", "sensevoice", "chinese-nlp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Chinese (Simplified)",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "openai>=1.40",      # LLM 调用（任意 OpenAI 兼容端点，默认 DeepSeek）
+    "PyYAML>=6.0",
+    "requests>=2.31",
+    "sherpa-onnx>=1.10", # 本机离线 ASR（SenseVoice），纯 ONNX 无需 torch
+]
+
+[project.optional-dependencies]
+# 证据溯源抽取的第二引擎（google/langextract，Apache-2.0）
+extract = ["langextract>=0.1"]
+# 说话人分离自动标注（需 HuggingFace token 并接受 pyannote 模型条款）
+diarize = ["pyannote.audio>=3.1", "torch>=2.0", "torchaudio>=2.0"]
+dev = ["pytest>=8.0"]
+
+[project.urls]
+Homepage = "https://github.com/nikiki-star/salesvoice"
+Repository = "https://github.com/nikiki-star/salesvoice"
+Issues = "https://github.com/nikiki-star/salesvoice/issues"
+
+[project.scripts]
+salesvoice = "salesvoice.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

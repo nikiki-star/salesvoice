@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>客户情报中台 · SalesVoice</title>
+<style>
+:root{
+  --bg:#eef1f5; --panel:#fff; --ink:#1c2530; --ink2:#5c6b7d; --ink3:#8c9aab;
+  --line:#dde3ea; --accent:#2c5f8d; --accent-l:#e8eff6;
+  --fact:#4a7c9b; --pref:#3f8f5f; --mine:#b23b3b; --style:#7d5aa6;
+  --rel:#a8801f; --biz:#2f6fb0; --warn:#c9861f; --ok:#2e8b57;
+  --shadow:0 1px 2px rgba(23,43,63,.06),0 4px 14px rgba(23,43,63,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea{font:inherit;color:inherit}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#c3ccd7;border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- 布局 ---------- */
+.app{display:grid;grid-template-columns:272px 1fr;height:100vh;overflow:hidden}
+.side{background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.main{overflow-y:auto;padding:22px 26px 60px}
+.topbar{
+  display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);
+  background:#fff;position:sticky;top:0;z-index:5
+}
+.brand{font-weight:700;font-size:15px;letter-spacing:.2px}
+.brand small{display:block;font-weight:400;font-size:11px;color:var(--ink3);letter-spacing:.3px}
+
+/* ---------- 客户列表 ---------- */
+.search{margin:12px 14px 6px;position:relative}
+.search input{
+  width:100%;padding:8px 10px 8px 30px;border:1px solid var(--line);border-radius:8px;
+  background:#f7f9fb;outline:none
+}
+.search input:focus{border-color:var(--accent);background:#fff}
+.search::before{content:"⌕";position:absolute;left:11px;top:6px;color:var(--ink3);font-size:15px}
+.clist{flex:1;overflow-y:auto;padding:6px 8px 16px}
+.citem{padding:10px 11px;border-radius:9px;cursor:pointer;margin-bottom:2px;transition:.12s}
+.citem:hover{background:#f4f7fa}
+.citem.on{background:var(--accent-l)}
+.citem .rn{font-weight:600;display:flex;align-items:center;gap:6px}
+.citem .sub{font-size:12px;color:var(--ink3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{
+  font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;
+  background:#f0e2e2;color:var(--mine);letter-spacing:.3px
+}
+.badge.n{background:#e7eef5;color:var(--accent)}
+.foot{padding:11px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--ink3);line-height:1.5}
+
+/* ---------- 客户头部 ---------- */
+.chead{display:flex;align-items:flex-start;gap:18px;margin-bottom:18px;flex-wrap:wrap}
+.chead h1{font-size:23px;letter-spacing:-.2px}
+.chead .meta{color:var(--ink2);font-size:13px;margin-top:3px}
+.statrow{display:flex;gap:9px;margin-left:auto;flex-wrap:wrap}
+.stat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 14px;min-width:78px;text-align:center}
+.stat b{display:block;font-size:19px;line-height:1.2}
+.stat span{font-size:11px;color:var(--ink3)}
+.stat.alert b{color:var(--mine)}
+
+/* ---------- 网格 ---------- */
+.grid{display:grid;grid-template-columns:1fr 372px;gap:18px;align-items:start}
+@media(max-width:1180px){.grid{grid-template-columns:1fr}}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px}
+.card>h2{
+  font-size:13px;font-weight:700;padding:13px 16px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;color:var(--ink);letter-spacing:.2px
+}
+.card>h2 .cnt{color:var(--ink3);font-weight:500;font-size:12px}
+.card .body{padding:14px 16px}
+.dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+
+/* ---------- 标签 ---------- */
+.tag{
+  border:1px solid var(--line);border-left:3px solid var(--ink3);border-radius:8px;
+  padding:9px 12px;margin-bottom:8px;background:#fcfdfe
+}
+.tag:last-child{margin-bottom:0}
+.tag.fact{border-left-color:var(--fact)} .tag.preference{border-left-color:var(--pref)}
+.tag.landmine{border-left-color:var(--mine);background:#fefbfb}
+.tag.style{border-left-color:var(--style)} .tag.relation{border-left-color:var(--rel)}
+.tag.business{border-left-color:var(--biz)}
+.tag .th{display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap}
+.tag .k{font-weight:650;font-size:13px}
+.tag .v{color:var(--ink);font-size:13.5px}
+.tag .evi{
+  font-size:12px;color:var(--ink2);margin-top:6px;padding:6px 9px;background:#f4f6f9;
+  border-radius:6px;border-left:2px solid #cfd8e2;line-height:1.5
+}
+.tag .evi.fail{background:#fff6f0;border-left-color:var(--warn)}
+.tag .evi.fuzzy{background:#fdfbf3;border-left-color:#d9c07a}
+.tag .tg{font-size:12px;color:var(--warn);margin-top:4px}
+.tag .tm{font-size:11px;color:var(--ink3);margin-top:5px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.sev{font-size:10px;font-weight:700;padding:1.5px 7px;border-radius:20px;letter-spacing:.4px}
+.sev.high{background:#fbe6e6;color:#9d2b2b} .sev.medium{background:#fdf0dc;color:#95631a}
+.sev.low{background:#eef1f4;color:#6b7887}
+.ver{color:var(--ok);font-size:11px} .ver.no{color:var(--warn)} .ver.mid{color:#b8912f}
+.xbtn{font-size:11px;color:var(--ink3);text-decoration:underline;margin-left:auto}
+.xbtn:hover{color:var(--mine)}
+
+/* ---------- 建议 ---------- */
+.adv-tabs{display:flex;gap:6px;padding:10px 14px 0;flex-wrap:wrap}
+.adv-tab{
+  font-size:12px;padding:5px 11px;border-radius:20px;border:1px solid var(--line);
+  background:#fff;color:var(--ink2)
+}
+.adv-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.adv-out{padding:14px 16px;font-size:13px;line-height:1.75}
+.adv-out h3{font-size:14px;margin:12px 0 6px} .adv-out h4{font-size:13px;margin:10px 0 5px}
+.adv-out ul{margin:6px 0 6px 18px} .adv-out li{margin-bottom:4px}
+.adv-out strong{color:#0f2a44}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid #cfd8e2;border-top-color:var(--accent);
+  border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{color:var(--ink3);font-size:13px;padding:22px 16px;text-align:center}
+
+/* ---------- 预检 ---------- */
+.check-box{padding:13px 16px}
+.check-box textarea{
+  width:100%;min-height:62px;padding:9px;border:1px solid var(--line);border-radius:8px;
+  resize:vertical;outline:none;font-size:13px;background:#fafbfc
+}
+.check-box textarea:focus{border-color:var(--accent);background:#fff}
+.btn{
+  background:var(--accent);color:#fff;padding:7px 15px;border-radius:8px;font-size:13px;
+  font-weight:600;margin-top:9px
+}
+.btn:hover{background:#244f76}
+.btn.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+.btn:disabled{opacity:.5;cursor:default}
+.risk{margin-top:11px;padding:11px 13px;border-radius:9px;font-size:13px;line-height:1.65}
+.risk.high{background:#fbe6e6;border:1px solid #e7b9b9;color:#8d2020}
+.risk.medium{background:#fdf0dc;border:1px solid #e8cf9e;color:#7d5410}
+.risk.low{background:#eef4fb;border:1px solid #c8d9ea;color:#255a86}
+.risk.none{background:#eaf5ee;border:1px solid #bfdcc8;color:#226b42}
+.risk .hit{margin-top:7px;padding-top:7px;border-top:1px dashed rgba(0,0,0,.13)}
+.risk .hit b{font-weight:700}
+
+/* ---------- 时间线 ---------- */
+.tl{position:relative;padding-left:20px}
+.tl::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1.5px;background:var(--line)}
+.tli{position:relative;margin-bottom:16px}
+.tli::before{content:"";position:absolute;left:-19px;top:5px;width:9px;height:9px;border-radius:50%;
+  background:#fff;border:2.5px solid var(--accent)}
+.tli .d{font-size:12px;font-weight:700;color:var(--accent)}
+.tli .s{font-size:13px;color:var(--ink2);margin-top:3px}
+.tli .l{font-size:11px;color:var(--ink3)}
+
+/* ---------- 模态 ---------- */
+.mask{position:fixed;inset:0;background:rgba(18,30,42,.45);display:none;align-items:center;
+  justify-content:center;z-index:50;padding:24px}
+.mask.on{display:flex}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:660px;max-height:88vh;overflow-y:auto;
+  box-shadow:0 20px 60px rgba(10,25,40,.3)}
+.modal h2{font-size:16px;padding:17px 20px;border-bottom:1px solid var(--line)}
+.modal .mbody{padding:18px 20px}
+.modal .mfoot{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:5px}
+.field input,.field textarea{
+  width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;outline:none;font-size:13px
+}
+.field input:focus,.field textarea:focus{border-color:var(--accent)}
+.field textarea{min-height:180px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.6}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hint{font-size:11.5px;color:var(--ink3);margin-top:5px;line-height:1.5}
+.toast{
+  position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(70px);
+  background:#1c2530;color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;
+  box-shadow:0 8px 26px rgba(15,28,42,.3);opacity:0;transition:.28s;z-index:80;max-width:80vw
+}
+.toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ 侧栏 ============ -->
+  <aside class="side">
+    <div class="topbar" style="position:static">
+      <div class="brand">客户情报中台<small>SalesVoice · 本地运行</small></div>
+    </div>
+    <div class="search"><input id="q" placeholder="搜索客户 / 标签 / 证据…" autocomplete="off"></div>
+    <div class="clist" id="clist"><div class="empty">加载中…</div></div>
+    <div style="padding:0 14px 10px"><button class="btn" style="width:100%;margin:0" onclick="openIngest()">＋ 录入会面</button></div>
+    <div class="foot">数据存于本机 SQLite，录音不出设备</div>
+  </aside>
+
+  <!-- ============ 主区 ============ -->
+  <main class="main" id="main">
+    <div class="empty" style="padding-top:80px">
+      <div style="font-size:34px;margin-bottom:10px">👤</div>
+      从左侧选择一个客户，或点击「录入会面」粘贴一段对话
+    </div>
+  </main>
+</div>
+
+<!-- ============ 录入会面 ============ -->
+<div class="mask" id="maskIngest">
+  <div class="modal">
+    <h2>录入会面 · 从对话生成客户情报</h2>
+    <div class="mbody">
+      <div class="row">
+        <div class="field"><label>客户名称 *</label><input id="f_name" placeholder="如：王总"></div>
+        <div class="field"><label>会面日期</label><input id="f_date" type="date"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>公司</label><input id="f_company" placeholder="选填"></div>
+        <div class="field"><label>职位</label><input id="f_title" placeholder="选填"></div>
+      </div>
+      <div class="field">
+        <label>对话转录文本 *</label>
+        <textarea id="f_text" placeholder="【客户】……&#10;【销售】……&#10;&#10;有说话人标记时准确率更高；没有也能跑，但会依赖模型推断。"></textarea>
+        <div class="hint">支持【客户】【销售】这样的说话人标记 —— 这对区分「客户说的」和「你说的」很关键，只有客户说的话才会被记为客户情报。</div>
+      </div>
+      <div class="field">
+        <label>或选择本机音频文件路径（转写）</label>
+        <input id="f_audio" placeholder="例如 /path/to/meeting.m4a （留空则只用上面的文本）">
+        <div class="hint">本机转写使用 SenseVoice，音频不会离开这台机器。</div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost" onclick="closeIngest()">取消</button>
+      <button class="btn" id="btnIngest" onclick="doIngest()">开始提炼情报</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (p, o) => {
+  const r = await fetch(p, o);
+  const j = await r.json().catch(() => ({ok:false, error:'响应不是 JSON'}));
+  if (!r.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+};
+let CUR = null, TAX = null, ADV = 'brief';
+
+function toast(m, ms = 2600) {
+  const t = $('#toast'); t.textContent = m; t.classList.add('on');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('on'), ms);
+}
+
+/* ---------- 建议的 Markdown 渲染（无外部依赖） ---------- */
+function md(src) {
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let out = esc(src || '');
+  out = out.replace(/```([\s\S]*?)```/g, (m,c) => '<pre style="background:#f4f6f9;padding:10px;border-radius:7px;overflow-x:auto;font-size:12px">'+c+'</pre>');
+  out = out.replace(/^#### (.*)$/gm, '<h4>$1</h4>')
+           .replace(/^### (.*)$/gm, '<h4>$1</h4>')
+           .replace(/^## (.*)$/gm, '<h3>$1</h3>')
+           .replace(/^# (.*)$/gm, '<h3>$1</h3>')
+           .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+           .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  const lines = out.split('\n'); const res = []; let inUl = false;
+  for (const ln of lines) {
+    const m = ln.match(/^\s*[-*]\s+(.*)$/);
+    if (m) { if (!inUl) { res.push('<ul>'); inUl = true; } res.push('<li>' + m[1] + '</li>'); }
+    else {
+      if (inUl) { res.push('</ul>'); inUl = false; }
+      if (ln.trim()) res.push(ln.startsWith('<h') || ln.startsWith('<pre') ? ln : '<p style="margin:6px 0">' + ln + '</p>');
+    }
+  }
+  if (inUl) res.push('</ul>');
+  return res.join('\n');
+}
+
+/* ---------- 侧栏 ---------- */
+async function loadClients(keepSel) {
+  const j = await api('/api/clients');
+  const list = $('#clist');
+  if (!j.clients.length) {
+    list.innerHTML = '<div class="empty">还没有客户<br><br>点击下方「录入会面」<br>粘贴一段对话试试</div>';
+    return;
+  }
+  list.innerHTML = j.clients.map(c => `
+    <div class="citem ${CUR===c.id?'on':''}" onclick="openClient('${c.id}')">
+      <div class="rn">${esc(c.name)}
+        ${c.landmine_count ? `<span class="badge">⚠ ${c.landmine_count}</span>` : ''}
+      </div>
+      <div class="sub">${esc([c.company, c.title].filter(Boolean).join(' · ') || '未填写单位')}</div>
+      <div class="sub">${c.meeting_count} 次会面 · ${c.tag_count} 条标签${c.last_met ? ' · 最近 ' + c.last_met : ''}</div>
+    </div>`).join('');
+  if (keepSel && CUR) openClient(CUR, true);
+}
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- 客户详情 ---------- */
+async function openClient(id, silent) {
+  CUR = id;
+  document.querySelectorAll('.citem').forEach(e => e.classList.remove('on'));
+  const p = await api('/api/clients/' + id);
+  const c = p.client, s = p.stats;
+  const sevRank = {high:0, medium:1, low:2, '':3};
+
+  const catCards = Object.entries(p.categories)
+    .filter(([k, v]) => v.items.length)
+    .sort((a, b) => {
+      const order = ['landmine','preference','fact','business','style','relation'];
+      return order.indexOf(a[0]) - order.indexOf(b[0]);
+    })
+    .map(([k, v]) => {
+      const items = v.items.slice().sort((a, b) =>
+        (sevRank[a.severity||''] - sevRank[b.severity||'']) || (b.confidence - a.confidence));
+      return `
+      <div class="card">
+        <h2><span class="dot" style="background:${v.color}"></span>${v.label}
+          <span class="cnt">${items.length} 条</span></h2>
+        <div class="body">${items.map(t => tagHtml(t)).join('')}</div>
+      </div>`;
+    }).join('');
+
+  const timeline = p.meetings.length ? `
+    <div class="card">
+      <h2>会面时间线 <span class="cnt">${p.meetings.length} 次</span></h2>
+      <div class="body"><div class="tl">${p.meetings.map(m => `
+        <div class="tli">
+          <div class="d">${esc(m.met_on)}</div>
+          <div class="l">${esc([m.location, m.attendees].filter(Boolean).join(' · ') || '未记录地点')}</div>
+          ${m.summary ? `<div class="s">${esc(m.summary).slice(0, 260)}</div>` : ''}
+        </div>`).join('')}</div></div>
+    </div>` : '';
+
+  const sup = (p.superseded || []).length ? `
+    <div class="card">
+      <h2>历史情报 <span class="cnt">${p.superseded.length} 条被新信息取代</span></h2>
+      <div class="body">${p.superseded.slice(0,12).map(t => `
+        <div class="tag ${t.category}" style="opacity:.62">
+          <div class="th"><span class="k">${esc(t.key)}</span></div>
+          <div class="v">${esc(t.value)}</div>
+          <div class="tm"><span>${esc((t.created_at||'').slice(0,10))}</span></div>
+        </div>`).join('')}</div>
+    </div>` : '';
+
+  $('#main').innerHTML = `
+    <div class="chead">
+      <div>
+        <h1>${esc(c.name)}</h1>
+        <div class="meta">${esc([c.company, c.title, c.industry].filter(Boolean).join(' · ') || '未填写单位信息')}</div>
+      </div>
+      <div class="statrow">
+        <div class="stat"><b>${s.tags}</b><span>情报标签</span></div>
+        <div class="stat alert"><b>${s.landmines}</b><span>雷区</span></div>
+        <div class="stat ${s.high_severity?'alert':''}"><b>${s.high_severity}</b><span>高危</span></div>
+        <div class="stat"><b>${p.meetings.length}</b><span>会面次数</span></div>
+      </div>
+    </div>
+    <div class="grid">
+      <div>${catCards || '<div class="card"><div class="empty">该客户暂无情报标签</div></div>'}${timeline}${sup}</div>
+      <div>
+        <div class="card">
+          <h2>AI 行动建议</h2>
+          <div class="adv-tabs" id="advTabs">
+            ${Object.entries(TAX.advice_types).map(([k,v]) =>
+              `<button class="adv-tab ${k===ADV?'on':''}" onclick="loadAdvice('${k}')">${v.label}</button>`).join('')}
+          </div>
+          <div class="adv-out" id="advOut"><div class="empty">点击上方按钮生成建议</div></div>
+        </div>
+        <div class="card">
+          <h2>⚠ 雷区预检 <span class="cnt">动手前先问一句</span></h2>
+          <div class="check-box">
+            <textarea id="scenario" placeholder="例：这次带两瓶茅台过去，安排在粤菜馆，饭桌上聊聊他儿子接班的事"></textarea>
+            <button class="btn" id="btnCheck" onclick="doCheck()">检查是否踩雷</button>
+            <div id="riskOut"></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  if (!silent) loadAdvice(ADV);
+}
+
+function tagHtml(t) {
+  const sev = t.severity ? `<span class="sev ${t.severity}">${t.severity === 'high' ? '高危' : t.severity === 'medium' ? '中' : '低'}</span>` : '';
+  const m = t.evidence_mode || '';
+  const evCls = m === 'exact' ? '' : (m === 'fuzzy' ? 'fuzzy' : 'fail');
+  const evPre = m === 'exact' ? '' : (m === 'fuzzy' ? '识别误差 · ' : '原话未回验 · ');
+  const verCls = m === 'exact' ? 'ver' : (m === 'fuzzy' ? 'ver mid' : 'ver no');
+  const verTxt = m === 'exact' ? '✓ 原话逐字可溯' : (m === 'fuzzy' ? '≈ 近似可溯（识别误差）' : '⚠ 待复核');
+  return `
+  <div class="tag ${t.category}">
+    <div class="th"><span class="k">${esc(t.key)}</span>${sev}</div>
+    <div class="v">${esc(t.value)}</div>
+    ${t.evidence ? `<div class="evi ${evCls}">${evPre}「${esc(t.evidence)}」</div>` : ''}
+    ${t.trigger_when ? `<div class="tg">触发场景：${esc(t.trigger_when)}</div>` : ''}
+    <div class="tm">
+      <span>信心 ${t.confidence}</span>
+      ${t.speaker ? `<span>${esc(t.speaker)}</span>` : ''}
+      <span class="${verCls}">${verTxt}</span>
+      <button class="xbtn" onclick="delTag('${t.id}')">删除</button>
+    </div>
+  </div>`;
+}
+
+/* ---------- AI 建议 ---------- */
+async function loadAdvice(type) {
+  ADV = type;
+  document.querySelectorAll('.adv-tab').forEach(b =>
+    b.classList.toggle('on', b.textContent.trim() === TAX.advice_types[type].label));
+  const out = $('#advOut');
+  out.innerHTML = '<div class="empty"><span class="spin"></span> 正在基于画像生成建议…</div>';
+  try {
+    const j = await api(`/api/clients/${CUR}/advice?type=${type}`);
+    out.innerHTML = md(j.markdown) +
+      (j.based_on && j.based_on.length ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:11.5px;color:var(--ink3)">引用标签：${j.based_on.map(esc).join(' · ')}</div>` : '');
+  } catch (e) { out.innerHTML = '<div class="empty">生成失败：' + esc(e.message) + '</div>'; }
+}
+
+/* ---------- 雷区预检 ---------- */
+async function doCheck() {
+  const sc = $('#scenario').value.trim();
+  if (!sc) return toast('请先描述你打算做的事');
+  const btn = $('#btnCheck'); btn.disabled = true; btn.textContent = '检查中…';
+  try {
+    const j = await api(`/api/clients/${CUR}/check`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario: sc })
+    });
+    const label = { high: '高危 · 建议取消或改方案', medium: '有风险 · 需要调整', low: '轻微风险', none: '未发现踩雷', unknown: '无法判断' }[j.risk] || j.risk;
+    $('#riskOut').innerHTML = `<div class="risk ${j.risk}">
+      <strong>${label}</strong>${j.verdict ? '<br>' + esc(j.verdict) : ''}
+      ${(j.hits || []).map(h => `<div class="hit"><b>命中雷区：${esc(h.key)}</b><br>${esc(h.reason || '')}
+        ${h.advice ? '<br>→ 建议：' + esc(h.advice) : ''}</div>`).join('')}
+    </div>`;
+  } catch (e) { toast('预检失败：' + e.message); }
+  btn.disabled = false; btn.textContent = '检查是否踩雷';
+}
+
+/* ---------- 删除标签 ---------- */
+async function delTag(id) {
+  if (!confirm('删除这条情报？（用于移除不准确或敏感的内容）')) return;
+  try { await api('/api/tags/' + id, { method: 'DELETE' }); toast('已删除'); openClient(CUR, true); }
+  catch (e) { toast('删除失败：' + e.message); }
+}
+
+/* ---------- 录入会面 ---------- */
+function openIngest() {
+  $('#f_date').value = new Date().toISOString().slice(0, 10);
+  $('#maskIngest').classList.add('on');
+}
+function closeIngest() { $('#maskIngest').classList.remove('on'); }
+
+async function doIngest() {
+  const name = $('#f_name').value.trim(), text = $('#f_text').value.trim();
+  const audio = $('#f_audio').value.trim();
+  if (!name) return toast('请填写客户名称');
+  if (!text && !audio) return toast('请粘贴对话文本，或填写音频文件路径');
+
+  const btn = $('#btnIngest'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 正在提炼情报…';
+  let transcript = text;
+
+  try {
+    if (!transcript && audio) {
+      toast('正在本机转写音频，请稍候…', 8000);
+      const t = await api('/api/transcribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio_path: audio, engine: 'sensevoice' })
+      });
+      transcript = t.marked_text || t.text;
+      $('#f_text').value = transcript;
+      toast('转写完成，开始提炼情报…', 3000);
+    }
+    const j = await api('/api/ingest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: name, met_on: $('#f_date').value, transcript,
+        company: $('#f_company').value.trim(), title: $('#f_title').value.trim()
+      })
+    });
+    closeIngest();
+    $('#f_name').value = $('#f_text').value = $('#f_company').value = $('#f_title').value = $('#f_audio').value = '';
+    toast(`提炼完成：写入 ${j.tags_written} 条情报，其中雷区 ${j.landmines} 条`);
+    await loadClients(true);
+    openClient(j.client_id);
+  } catch (e) {
+    toast('失败：' + e.message, 5000);
+  }
+  btn.disabled = false; btn.textContent = '开始提炼情报';
+}
+
+/* ---------- 搜索 ---------- */
+let qTimer;
+$('#q').addEventListener('input', e => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(async () => {
+    const q = e.target.value.trim();
+    if (!q) return loadClients();
+    const j = await api('/api/search?q=' + encodeURIComponent(q));
+    $('#clist').innerHTML = j.results.length ? j.results.map(r => `
+      <div class="citem" onclick="openClient('${r.client_id}')">
+        <div class="rn">${esc(r.client_name)} <span class="badge n">${esc(r.key)}</span></div>
+        <div class="sub">${esc(r.value).slice(0, 50)}</div>
+        ${r.evidence ? `<div class="sub" style="color:#a9b4c1">「${esc(r.evidence).slice(0, 40)}」</div>` : ''}
+      </div>`).join('')
+      : '<div class="empty">没有匹配的情报</div>';
+  }, 260);
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeIngest(); });
+
+/* ---------- 启动 ---------- */
+(async () => {
+  try {
+    const h = await api('/api/health');
+    if (!h.has_key) toast('警告：未检测到 LLM 凭据，抽取和建议将不可用', 6000);
+    TAX = await api('/api/taxonomy');
+    await loadClients();
+  } catch (e) {
+    $('#clist').innerHTML = '<div class="empty">无法连接后端<br><br>' + esc(e.message) + '</div>';
+  }
+})();
+</script>
+</body>
+</html>

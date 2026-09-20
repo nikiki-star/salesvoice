@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# 最小权限：CI 只读仓库，不需要写权限（发布 release 由人工执行）
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- 核心逻辑
+  evidence:
+    name: 证据回验 + pytest (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # 防幻觉回验是本项目的核心，刻意零第三方依赖：即使依赖装不上，这一层也必须能验证。
+      - name: 证据回验（脚本模式，零依赖）
+        run: PYTHONPATH=src python tests/test_evidence.py
+
+      - name: pytest（单测 + 后端冒烟）
+        run: |
+          python -m pip install --disable-pip-version-check --quiet pytest
+          python -m pytest -q
+
+  # ---------------------------------------------------------------- 安装与起服务
+  install-and-smoke:
+    name: 依赖安装 + 后端冒烟
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # 校验 requirements 里的依赖（含 sherpa-onnx 二进制轮子）在 Linux 上真的能装
+      - name: 安装依赖
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python -m pip install --disable-pip-version-check -e .
+
+      - name: 导入冒烟（全部模块可导入）
+        run: |
+          python - <<'PY'
+          import salesvoice
+          import salesvoice.cli, salesvoice.config, salesvoice.extract, salesvoice.langextract_engine
+          import salesvoice.schema, salesvoice.server, salesvoice.setup_models, salesvoice.store
+          import salesvoice.suggest, salesvoice.transcribe
+          print("imports ok, version =", salesvoice.__version__)
+          PY
+
+      - name: 后端冒烟测试（真起 server，打真实 HTTP，不需要 LLM 凭据）
+        run: python tests/test_server_smoke.py
+
+      - name: CLI 冒烟
+        run: |
+          salesvoice --help > /dev/null
+          PYTHONPATH=src python -m salesvoice.cli --help > /dev/null

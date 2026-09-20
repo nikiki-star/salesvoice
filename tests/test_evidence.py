@@ -45,14 +45,14 @@ def main() -> int:
     print("=" * 76)
 
     passed = failed = 0
-    for desc, evidence, want_ok, want_mode in CASES:
-        ok, mode = verify_evidence(evidence, TRANSCRIPT)
-        good = (ok == want_ok) and (mode == want_mode)
+    for case in CASES:
+        desc = case[0]
+        good, ok, mode = check(case)
         passed, failed = (passed + 1, failed) if good else (passed, failed + 1)
         mark = "✓" if good else "✗"
         print(f"{mark} {desc}")
-        print(f"    证据: {evidence[:44] or '(空)'}")
-        print(f"    结果: ok={ok} mode={mode!r}   期望: ok={want_ok} mode={want_mode!r}")
+        print(f"    证据: {case[1][:44] or '(空)'}")
+        print(f"    结果: ok={ok} mode={mode!r}   期望: ok={case[2]} mode={case[3]!r}")
         if not good:
             print(f"    ← 断言失败")
 
@@ -65,6 +65,29 @@ def main() -> int:
     print(f"通过 {passed} / {passed + failed}")
     print("=" * 76)
     return 0 if failed == 0 else 1
+
+
+def check(case) -> tuple[bool, bool, str]:
+    """跑一条用例，返回 (是否符合期望, ok, mode)。"""
+    _, evidence, want_ok, want_mode = case
+    ok, mode = verify_evidence(evidence, TRANSCRIPT)
+    return (ok == want_ok and mode == want_mode), ok, mode
+
+
+def test_evidence_case(case) -> None:
+    """pytest 入口（参数化见下）。"""
+    good, ok, mode = check(case)
+    assert good, f"{case[0]}：ok={ok} mode={mode!r}，期望 ok={case[2]} mode={case[3]!r}"
+
+
+try:  # 未装 pytest 时脚本模式照常可用
+    import pytest
+except ImportError:  # pragma: no cover
+    pytest = None
+
+if pytest is not None:
+    test_evidence_case = pytest.mark.parametrize(
+        "case", CASES, ids=[c[0] for c in CASES])(test_evidence_case)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,9 @@
 # SalesVoice · 客户语音情报中台
 
+[![CI](https://github.com/nikiki-star/salesvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/nikiki-star/salesvoice/actions/workflows/ci.yml)
+![version](https://img.shields.io/badge/version-0.1.0-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
+
 **把销售和客户的对话，变成可累积的客户情报——喜好、兴趣、雷区，以及下次见面该怎么做。**
 
 不是又一个会议纪要工具。市面上的转录工具都在回答「这次谈了什么」，
@@ -280,13 +284,26 @@ salesvoice/
 
 ## 测试
 
+测试分两层，**能在 CI 里跑的必须零外部条件**（不需要模型权重、不需要 LLM 凭据、不花钱）。
+
 ```bash
-PYTHONPATH=src .venv/bin/python tests/test_evidence.py     # 证据回验（无需网络）
-PYTHONPATH=src .venv/bin/python tests/test_asr.py          # 本机转写（需先下模型）
+# ---- 第一层：CI 上跑（提交即自动执行，见 .github/workflows/ci.yml）----
+PYTHONPATH=src .venv/bin/python tests/test_evidence.py     # 证据回验 11 例，零第三方依赖
+PYTHONPATH=src .venv/bin/python tests/test_server_smoke.py # 真起 server 打 HTTP，8 项断言
+.venv/bin/python -m pytest -q                              # 上两项（需 pip install pytest）
+
+# ---- 第二层：人工验收（需额外条件，不在 CI 里）----
+PYTHONPATH=src .venv/bin/python tests/test_asr.py          # 本机转写（需先下 240MB 模型）
 PYTHONPATH=src .venv/bin/python -m salesvoice.server 8777 & \
-  .venv/bin/python tests/e2e_test.py                       # 端到端（需 LLM 凭据）
-PYTHONPATH=src .venv/bin/python tests/compare_engines.py   # 双引擎对比
+  .venv/bin/python tests/e2e_test.py                       # 端到端全链路（需 LLM 凭据，会真实调用模型）
+PYTHONPATH=src .venv/bin/python tests/compare_engines.py   # 双引擎抽取对比（需 LLM 凭据）
 ```
+
+需要模型或凭据的脚本由 `tests/conftest.py` 显式排除，pytest 不会在收集阶段就把它们跑起来
+（`e2e_test.py` 在 import 时就会断言失败，`test_asr.py` 没有模型会中断整轮收集）。
+
+CI 在 Python **3.10 / 3.11 / 3.12** 上跑第一层，另有一个 job 校验
+`requirements.txt` 在 Linux 上能装、全部模块可导入、`server` 能起来并正确响应。
 
 ---
 

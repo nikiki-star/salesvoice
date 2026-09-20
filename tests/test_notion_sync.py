@@ -154,6 +154,21 @@ def test_build_draft_from_properties():
     assert draft.has_content
 
 
+@pytest.mark.parametrize("title,want", [
+    ("周工 2026-09-19 现场拜访", "周工"),
+    ("周工 2026-08-28 微信语音留言", "周工"),
+    ("王总 2026-09-16 会面", "王总"),
+    ("李总 2026-09-18 现场拜访记录", "李总"),
+    ("2026-08-28 鑫达五金 电话沟通", "鑫达五金"),
+    ("陈总 09-19 来电", "陈总"),
+    ("张三", "张三"),
+    ("远达机械 技术交流 2026-07-02", "远达机械"),
+])
+def test_client_name_from_varied_titles(title, want):
+    """同一客户的不同会面标题必须收敛到同一个名字，否则跨会面累积会断。"""
+    assert build_draft(_page(client=title)).client_name == want
+
+
 def test_transcript_from_blocks_skips_writeback_block():
     blocks = [_para(TRANSCRIPT), _writeback_block()]
     text = transcript_from_blocks(blocks)

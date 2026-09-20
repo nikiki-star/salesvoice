@@ -306,13 +306,40 @@ def build_draft(page: dict, blocks: list[dict] | None = None,
     return draft
 
 
+_TITLE_SUFFIX_RE = re.compile(
+    r"(微信语音留言|语音留言|微信留言|语音|留言|电话沟通|电话|通话|"
+    r"现场拜访|上门拜访|拜访|回访|初访|复访|现场|线上面谈|面谈|会谈|洽谈|沟通|"
+    r"会议|评审|技术交流|交流|会面|会议记录|记录|纪要|笔记|"
+    r"meeting|call|notes?|visit)+\s*$",
+    re.IGNORECASE)
+
+
 def _clean_client_name(raw: str, met_on: str = "") -> str:
-    """从页面标题里剥掉日期与常见后缀，得到客户名。"""
+    """从页面标题里剥掉日期与常见后缀，得到客户名。
+
+    Notion 里的页面标题通常是「客户名 + 日期 + 事件」或「日期 + 客户名 + 事件」，
+    例如「周工 2026-09-19 现场拜访」「2026-08-28 微信语音留言」。
+    关键是**同一客户的不同会面必须归到同一个名字**，否则跨会面累积就断了 ——
+    所以日期与其后的描述性后缀都要剥干净。
+    """
     name = (raw or "").strip()
-    name = re.sub(r"\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?", " ", name)
-    name = re.sub(r"(会面|拜访|沟通|会议|录音|记录|纪要|笔记|meeting|notes?)\s*$", "", name,
-                  flags=re.IGNORECASE)
-    return re.sub(r"\s+", " ", name).strip(" -—_·|") or (raw or "").strip()
+    if not name:
+        return ""
+
+    m = re.search(r"\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?|\d{1,2}[-/月]\d{1,2}日?", name)
+    if m:
+        before = name[:m.start()].strip(" -—_·|")
+        if before:                      # 日期之前有内容 → 那就是客户名
+            name = before
+        else:                           # 日期打头 → 去掉日期看后面
+            name = name[m.end():]
+
+    prev = None
+    while prev != name:                 # 后缀可能叠加（"微信语音留言"、"现场拜访记录"）
+        prev = name
+        name = _TITLE_SUFFIX_RE.sub("", name).strip(" -—_·|")
+    name = re.sub(r"\s+", " ", name).strip()
+    return name or (raw or "").strip()
 
 
 def content_hash(draft: MeetingDraft) -> str:

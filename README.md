@@ -4,6 +4,8 @@
 ![version](https://img.shields.io/badge/version-0.1.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
+[更新日志](CHANGELOG.md) · [最新版本](https://github.com/nikiki-star/salesvoice/releases/latest)
+
 **把销售和客户的对话，变成可累积的客户情报——喜好、兴趣、雷区，以及下次见面该怎么做。**
 
 不是又一个会议纪要工具。市面上的转录工具都在回答「这次谈了什么」，
@@ -256,11 +258,15 @@ salesvoice/
 │   └── setup_models.py        模型下载
 ├── web/index.html             ★ 单文件看板（零构建、零 CDN）
 ├── tests/
-│   ├── test_evidence.py       证据回验单测（11 例）
-│   ├── e2e_test.py            端到端 API 全链路
-│   ├── test_asr.py            本机 ASR 验证
+│   ├── conftest.py            pytest 收集配置（排除需模型/凭据的验收脚本）
+│   ├── test_evidence.py       证据回验单测（11 例，零第三方依赖）
+│   ├── test_server_smoke.py   后端冒烟：真起 server 打 HTTP（8 项断言）
+│   ├── e2e_test.py            端到端 API 全链路（人工验收，需凭据）
+│   ├── test_asr.py            本机 ASR 验证（人工验收，需模型）
 │   ├── compare_engines.py     双引擎对比
 │   └── sample_transcript.txt  示例对话
+├── .github/workflows/ci.yml   CI：证据回验 + pytest + Linux 安装与后端冒烟
+├── CHANGELOG.md               更新日志
 ├── docs/                      截图等资产
 ├── models/                    模型权重（不入库，setup_models 下载）
 └── data/                      SQLite / 转录 / 录音（不入库）

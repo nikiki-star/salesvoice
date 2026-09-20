@@ -14,7 +14,17 @@ tests/ 下的脚本分两类，故意区分开：
 
 若把后一类交给 pytest，收集阶段就会真的跑起来：e2e_test 会在 import 时断言失败，
 test_asr 会因为没有模型而中断整轮收集。所以这里显式忽略它们。
+
+另外把 `src/` 挂进 sys.path：CI 的「核心逻辑层」job 刻意不安装本项目（零依赖），
+测试也该在没 `pip install -e .` 的情况下直接可跑。
 """
+
+import sys
+from pathlib import Path
+
+_SRC = Path(__file__).resolve().parents[1] / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 collect_ignore = [
     "test_asr.py",

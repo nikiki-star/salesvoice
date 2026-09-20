@@ -188,8 +188,9 @@ input,textarea{font:inherit;color:inherit}
     </div>
     <div class="search"><input id="q" placeholder="搜索客户 / 标签 / 证据…" autocomplete="off"></div>
     <div class="clist" id="clist"><div class="empty">加载中…</div></div>
-    <div style="padding:0 14px 10px"><button class="btn" style="width:100%;margin:0" onclick="openIngest()">＋ 录入会面</button></div>
-    <div class="foot">数据存于本机 SQLite，录音不出设备</div>
+    <div style="padding:0 14px 6px"><button class="btn" style="width:100%;margin:0" onclick="openIngest()">＋ 录入会面</button></div>
+    <div style="padding:0 14px 10px"><button class="btn ghost" style="width:100%;margin:0" id="btnNotion" onclick="doNotionSync()">⟳ 从 Notion 同步</button></div>
+    <div class="foot" id="notionFoot">数据存于本机 SQLite，录音不出设备</div>
   </aside>
 
   <!-- ============ 主区 ============ -->
@@ -271,6 +272,52 @@ function md(src) {
   }
   if (inUl) res.push('</ul>');
   return res.join('\n');
+}
+
+/* ---------- 从 Notion 同步（后台跑，界面不阻塞） ---------- */
+let NOTION_TIMER = null;
+
+async function refreshNotionFoot() {
+  try {
+    const st = await api('/api/notion');
+    const foot = $('#notionFoot');
+    if (!st.has_key) { foot.textContent = '未配置 Notion：把 NOTION_API_KEY 写进 ~/.hermes/.env'; return; }
+    if (!st.source_set) { foot.textContent = '未设置投放区 SALESVOICE_NOTION_SOURCE'; return; }
+    const last = st.ledger && st.ledger[0];
+    foot.textContent = st.running
+      ? `Notion 同步中…（${st.started_at}）`
+      : (last ? `Notion 上次同步：${last.synced_at.slice(0, 16)} · ${last.status}` : 'Notion 已配置，尚未同步');
+  } catch (e) { /* 状态拉取失败不影响看板 */ }
+}
+
+async function doNotionSync() {
+  const btn = $('#btnNotion');
+  try {
+    const st = await api('/api/notion');
+    if (!st.has_key) { toast('未配置 Notion token：写进 ~/.hermes/.env 的 NOTION_API_KEY', 5200); return; }
+    if (!st.source_set) { toast('未设置投放区：SALESVOICE_NOTION_SOURCE=数据库或页面 ID', 5200); return; }
+    if (st.running) { toast('同步已在后台进行中…'); return; }
+  } catch (e) { toast(e.message); return; }
+
+  const restore = () => { btn.disabled = false; btn.textContent = '⟳ 从 Notion 同步'; };
+  btn.disabled = true; btn.textContent = '同步中…（可继续用看板）';
+  try {
+    await api('/api/notion/sync', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+    });
+    toast('已在后台开始：下载音频 → 本机转写 → 情报抽取', 4200);
+    clearInterval(NOTION_TIMER);
+    NOTION_TIMER = setInterval(async () => {
+      try {
+        const st = await api('/api/notion');
+        if (st.running) { refreshNotionFoot(); return; }
+        clearInterval(NOTION_TIMER); restore(); refreshNotionFoot();
+        if (st.error) { toast('同步失败：' + st.error, 7000); return; }
+        const r = st.last_report;
+        if (r) { toast(`同步完成：入库 ${r.ingested} · 跳过 ${r.skipped} · 失败 ${r.failed}`, 5200); loadClients(); }
+      } catch (e) { clearInterval(NOTION_TIMER); restore(); }
+    }, 3000);
+  } catch (e) { restore(); toast(e.message, 5200); }
 }
 
 /* ---------- 侧栏 ---------- */
@@ -512,6 +559,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeIngest(
     if (!h.has_key) toast('警告：未检测到 LLM 凭据，抽取和建议将不可用', 6000);
     TAX = await api('/api/taxonomy');
     await loadClients();
+    refreshNotionFoot();
   } catch (e) {
     $('#clist').innerHTML = '<div class="empty">无法连接后端<br><br>' + esc(e.message) + '</div>';
   }

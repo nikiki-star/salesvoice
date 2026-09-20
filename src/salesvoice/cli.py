@@ -43,6 +43,93 @@ def cmd_setup_models(args) -> int:
     return main()
 
 
+def cmd_notion_sources(args) -> int:
+    from .notion_sync import list_sources
+
+    try:
+        list_sources()
+    except Exception as exc:  # noqa: BLE001
+        print(f"✗ {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_notion_init(args) -> int:
+    """在指定 Notion 页面下建一个结构匹配 salesvoice 的「客户会面录音」数据库。"""
+    from .notion_client import NotionClient
+
+    try:
+        client = NotionClient()
+        me = client.check()
+        print(f"[notion] 集成：{me['name']}（{me['id']}）")
+        db_id, ds_id, props = client.create_meeting_database(args.parent, args.title)
+    except Exception as exc:  # noqa: BLE001
+        print(f"✗ {exc}", file=sys.stderr)
+        return 1
+
+    print(f"✓ 已创建数据库：{args.title}")
+    print(f"  database_id    : {db_id}")
+    print(f"  data_source_id : {ds_id}")
+    print(f"  属性：{'、'.join(props)}")
+    print("\n接下来把它设成投放区（用 data_source_id 查询最稳）：")
+    print(f"  export SALESVOICE_NOTION_SOURCE={ds_id or db_id}")
+    print("  或跨会话固定：把它写进 ~/.hermes/.env")
+    print("\n别忘了在该数据库页面里：… → 连接 → 选你的集成"
+          "（新建的数据源通常已随父页面共享，但换页面时要重新连接）")
+    return 0
+
+
+def cmd_notion_sync(args) -> int:
+    from .notion_sync import FixtureSource, NotionApiSource, sync_notion
+
+    store = Store()
+    if args.fixture:
+        print(f"[notion] 离线 fixture 模式：{args.fixture}（不联网、不需要 token）")
+        source = FixtureSource(args.fixture)
+    else:
+        if not config.has_notion_key():
+            print(
+                "未找到 Notion 集成 token。四步配好：\n"
+                "  1) 打开 notion.so/my-integrations → 新建内部集成，复制 token（ntn_/secret_ 开头）\n"
+                "  2) 写进 ~/.hermes/.env：NOTION_API_KEY=ntn_xxxx（别贴在聊天里）\n"
+                "  3) 在 Notion 里打开「录音/会面记录」数据库 → … → 连接 → 选该集成\n"
+                "  4) export SALESVOICE_NOTION_SOURCE=<该数据库或页面的 URL/ID>\n"
+                "  然后：salesvoice notion-sync --dry-run 先看会做什么\n"
+                "  没有现成数据库：salesvoice notion-init --parent <页面URL> 自动建好结构",
+                file=sys.stderr)
+            return 2
+        if not config.NOTION_SOURCE:
+            print("未设置投放区 SALESVOICE_NOTION_SOURCE。先用 "
+                  "`salesvoice notion-sources` 从集成可见的候选里挑一个。", file=sys.stderr)
+            return 2
+        try:
+            source = NotionApiSource()
+        except Exception as exc:  # noqa: BLE001
+            print(f"✗ {exc}", file=sys.stderr)
+            return 1
+        print(f"[notion] 投放区：{source.describe()}")
+
+    mode = "预演（不写库、不反写）" if args.dry_run else "正式同步"
+    wb = "跟随配置" if args.writeback is None else ("开" if args.writeback else "关")
+    print(f"[notion] {mode} · 反写：{wb} · 上限：{args.limit or '不限'}\n")
+
+    report = sync_notion(store, source=source, dry_run=args.dry_run, limit=args.limit,
+                         page_id=args.page, writeback=args.writeback, force=args.force,
+                         verbose=True)
+
+    print(f"\n{'=' * 72}")
+    print(f"扫描 {report['scanned']} 个页面 → 入库 {report['ingested']}，"
+          f"跳过 {report['skipped']}，失败 {report['failed']}")
+    print(f"{'=' * 72}")
+    if args.json:
+        import json as _json
+
+        print(_json.dumps(report, ensure_ascii=False, indent=2))
+    if not args.dry_run and report["ingested"]:
+        print("\n看板：salesvoice serve 后打开 http://127.0.0.1:8777")
+    return 0 if report["ok"] else 1
+
+
 def cmd_ingest(args) -> int:
     from .extract import extract_tags, summarize_meeting
     from .transcribe import segments_to_marked_text, transcribe
@@ -188,6 +275,27 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("setup-models", help="下载本机语音识别模型（约 1 GB）")
     p.set_defaults(func=cmd_setup_models)
+
+    p = sub.add_parser("notion-sync", help="从 Notion 拉取录音/文字稿并入库")
+    p.add_argument("--dry-run", action="store_true", help="只扫描不写库（先看会做什么）")
+    p.add_argument("--limit", type=int, help="最多处理多少个页面")
+    p.add_argument("--page", help="只处理指定 Notion 页面 ID")
+    p.add_argument("--force", action="store_true", help="忽略内容哈希，强制重新抽取")
+    p.add_argument("--writeback", dest="writeback", action="store_true", default=None,
+                   help="勾「已同步」并把回执写回 Notion")
+    p.add_argument("--no-writeback", dest="writeback", action="store_false",
+                   help="只读，不改动 Notion（默认）")
+    p.add_argument("--fixture", help="离线模式：读本地 fixture 目录，不联网")
+    p.add_argument("--json", action="store_true", help="输出完整报告的 JSON")
+    p.set_defaults(func=cmd_notion_sync)
+
+    p = sub.add_parser("notion-sources", help="列出集成可见的 Notion 数据库/页面")
+    p.set_defaults(func=cmd_notion_sources)
+
+    p = sub.add_parser("notion-init", help="在指定页面下创建结构匹配的录音数据库")
+    p.add_argument("--parent", required=True, help="父页面 ID 或 URL")
+    p.add_argument("--title", default="客户会面录音", help="数据库标题")
+    p.set_defaults(func=cmd_notion_init)
 
     p = sub.add_parser("ingest", help="录入一次会面")
     p.add_argument("--audio", help="音频文件路径（本机转写）")

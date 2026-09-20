@@ -1,6 +1,6 @@
 [project]
 name = "salesvoice"
-version = "0.1.0"
+version = "0.2.0"
 description = "客户语音情报中台 —— 从销售会面录音提炼客户画像、雷区与行动建议"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -95,6 +95,65 @@ def landmine_check(store: Store, client_id: str, scenario: str) -> dict:
     return quick_landmine_check(store.profile(client_id), scenario)
 
 
+# ---------------------------------------------------------------- Notion 同步
+
+_NOTION_SYNC: dict = {"running": False, "started_at": "", "finished_at": "",
+                      "report": None, "error": ""}
+_NOTION_LOCK = threading.Lock()
+
+
+def notion_status(store: Store) -> dict:
+    return {
+        "has_key": config.has_notion_key(),
+        "source": config.NOTION_SOURCE,
+        "source_set": bool(config.NOTION_SOURCE),
+        "writeback": config.NOTION_WRITEBACK,
+        "running": _NOTION_SYNC["running"],
+        "started_at": _NOTION_SYNC["started_at"],
+        "finished_at": _NOTION_SYNC["finished_at"],
+        "error": _NOTION_SYNC["error"],
+        "last_report": _NOTION_SYNC["report"],
+        "ledger": store.notion_sync_list(10),
+    }
+
+
+def start_notion_sync(store: Store, limit: int | None = None, dry_run: bool = False) -> dict:
+    """在后台线程里跑一次 Notion 同步。
+
+    同步会下载音频 + 本机转写 + 多次 LLM 调用，动辄几分钟，
+    所以 HTTP 请求只负责「启动」，进度由 GET /api/notion 反映。
+    """
+    with _NOTION_LOCK:
+        if _NOTION_SYNC["running"]:
+            return {"ok": False, "error": "已有同步任务在跑，请等它结束"}
+        if not config.has_notion_key():
+            return {"ok": False,
+                    "error": "未配置 Notion 集成 token：把 NOTION_API_KEY 写进 ~/.hermes/.env"}
+        if not config.NOTION_SOURCE:
+            return {"ok": False,
+                    "error": "未设置投放区：设置 SALESVOICE_NOTION_SOURCE 为那个数据库/页面"}
+        _NOTION_SYNC.update({"running": True, "error": "", "report": None,
+                             "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                             "finished_at": ""})
+
+    def _run() -> None:
+        from .notion_sync import NotionApiSource, sync_notion
+
+        try:
+            report = sync_notion(store, source=NotionApiSource(), limit=limit,
+                                 dry_run=dry_run, verbose=True)
+            _NOTION_SYNC["report"] = report
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            _NOTION_SYNC["error"] = f"{type(exc).__name__}: {exc}"
+        finally:
+            _NOTION_SYNC["running"] = False
+            _NOTION_SYNC["finished_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    threading.Thread(target=_run, daemon=True, name="notion-sync").start()
+    return {"ok": True, "started": True}
+
+
 # ---------------------------------------------------------------- HTTP
 
 
@@ -174,6 +233,9 @@ class Handler(BaseHTTPRequestHandler):
                 from .suggest import ADVICE_TYPES
                 return self._json({"ok": True, "categories": CATEGORIES, "advice_types": ADVICE_TYPES})
 
+            if p == "/api/notion":
+                return self._json({"ok": True, **notion_status(self.store)})
+
             if p.startswith("/api/"):
                 return self._err("未知接口", 404)
 
@@ -206,6 +268,11 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/api/transcribe":
                 from .transcribe import transcribe_payload
                 return self._json(transcribe_payload(self._body()))
+
+            if p == "/api/notion/sync":
+                b = self._body()
+                return self._json(start_notion_sync(self.store, limit=b.get("limit"),
+                                                    dry_run=bool(b.get("dry_run"))))
 
             return self._err("未知接口", 404)
 

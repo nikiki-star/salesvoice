@@ -1,7 +1,7 @@
 # SalesVoice · 客户语音情报中台
 
 [![CI](https://github.com/nikiki-star/salesvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/nikiki-star/salesvoice/actions/workflows/ci.yml)
-![version](https://img.shields.io/badge/version-0.1.0-blue)
+![version](https://img.shields.io/badge/version-0.2.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 [更新日志](CHANGELOG.md) · [最新版本](https://github.com/nikiki-star/salesvoice/releases/latest)
@@ -106,6 +106,35 @@ PYTHONPATH=src .venv/bin/python -m salesvoice.cli search 白酒
 export SALESVOICE_LLM_BASE_URL=http://127.0.0.1:11434/v1
 export SALESVOICE_LLM_MODEL=qwen2.5:14b
 ```
+
+---
+
+## Notion 当录音前端（手机录完，情报自动落到看板）
+
+在 Notion 里录、或让 Notion AI 记，SalesVoice 拉过来自己转写、抽取、入档。
+**自动识别内容形态**：页面里有文字稿就直接抽文本，只有音频就本机转写。
+
+```
+Notion 数据库「客户会面录音」 ──► 同步 ──► 文字稿直接抽 / 音频本机转写 ──► 证据回验 ──► 客户情报中台
+```
+
+```bash
+# 1) 建集成（notion.so/my-integrations）→ token 写进 ~/.hermes/.env 的 NOTION_API_KEY
+#    别忘了在 Notion 里把目标数据库「连接」给该集成，否则一定 404
+
+# 2) 没有现成数据库？一条命令建好结构（客户名称/公司/日期/参与人/地点/转录/录音/已同步）
+salesvoice notion-init --parent "<页面 URL>"
+export SALESVOICE_NOTION_SOURCE=<输出的 data_source_id>
+
+# 3) 先预演，再正式跑
+salesvoice notion-sync --dry-run
+salesvoice notion-sync --writeback      # 勾「已同步」+ 把雷区/统计回贴到 Notion 页面
+```
+
+看板左侧栏也有 **⟳ 从 Notion 同步** 按钮：后台线程执行，界面不阻塞，跑完自动刷新。
+**幂等**：按内容哈希记账，内容没变就跳过；页面补了音频或改了文字稿才重跑（`--force` 可强制）。
+
+完整配置、属性映射、踩坑清单见 [docs/notion-integration.md](docs/notion-integration.md)。
 
 ---
 
@@ -254,20 +283,23 @@ salesvoice/
 │   ├── store.py               ★ SQLite 中台，跨会面累积
 │   ├── suggest.py             AI 建议 + 雷区预检
 │   ├── server.py              HTTP 后端（仅标准库，零额外依赖）
+│   ├── notion_client.py       Notion API 客户端（仅标准库）
+│   ├── notion_sync.py         ★ Notion → 中台同步管道（自动识别文字稿/音频 + 幂等）
 │   ├── cli.py                 命令行入口
 │   └── setup_models.py        模型下载
 ├── web/index.html             ★ 单文件看板（零构建、零 CDN）
 ├── tests/
 │   ├── conftest.py            pytest 收集配置（排除需模型/凭据的验收脚本）
 │   ├── test_evidence.py       证据回验单测（11 例，零第三方依赖）
-│   ├── test_server_smoke.py   后端冒烟：真起 server 打 HTTP（8 项断言）
+│   ├── test_notion_sync.py    Notion 解析/幂等/音频分支单测（15 例，全离线）
+│   ├── test_server_smoke.py   后端冒烟：真起 server 打 HTTP（10 项断言）
 │   ├── e2e_test.py            端到端 API 全链路（人工验收，需凭据）
 │   ├── test_asr.py            本机 ASR 验证（人工验收，需模型）
 │   ├── compare_engines.py     双引擎对比
 │   └── sample_transcript.txt  示例对话
 ├── .github/workflows/ci.yml   CI：证据回验 + pytest + Linux 安装与后端冒烟
 ├── CHANGELOG.md               更新日志
-├── docs/                      截图等资产
+├── docs/                      截图、Notion 接入文档等资产
 ├── models/                    模型权重（不入库，setup_models 下载）
 └── data/                      SQLite / 转录 / 录音（不入库）
 ```
@@ -278,8 +310,11 @@ salesvoice/
 
 已完成的部分直接可用，以下是可以继续做的方向：
 
+- [x] **Notion 当录音前端** —— 页面里有文字稿就直接抽，只有音频就本机转写；按内容哈希幂等，
+      可选勾「已同步」+ 回执反写（见 [docs/notion-integration.md](docs/notion-integration.md)）
 - [ ] **说话人分离自动化** —— 当前依赖转录文稿里的 `【客户】` 标记，
       接入 pyannote 或 FunASR 的 cam++ 可自动分离（需 HuggingFace token）
+- [ ] **Notion 自动触发** —— 现在是手动/定时同步，可加 Worker 或轮询守护进程做到「录完即入库」
 - [ ] **实时录音转写** —— 目前是「录完导入」
 - [ ] **看板拖拽上传音频** —— 目前是填文件路径
 - [ ] **标签人工修正闭环** —— 现支持删除，可加编辑与合并
@@ -295,8 +330,8 @@ salesvoice/
 ```bash
 # ---- 第一层：CI 上跑（提交即自动执行，见 .github/workflows/ci.yml）----
 PYTHONPATH=src .venv/bin/python tests/test_evidence.py     # 证据回验 11 例，零第三方依赖
-PYTHONPATH=src .venv/bin/python tests/test_server_smoke.py # 真起 server 打 HTTP，8 项断言
-.venv/bin/python -m pytest -q                              # 上两项（需 pip install pytest）
+PYTHONPATH=src .venv/bin/python tests/test_server_smoke.py # 真起 server 打 HTTP，10 项断言
+.venv/bin/python -m pytest -q                              # 以上 + Notion 同步层 15 例（共 27 个用例）
 
 # ---- 第二层：人工验收（需额外条件，不在 CI 里）----
 PYTHONPATH=src .venv/bin/python tests/test_asr.py          # 本机转写（需先下 240MB 模型）

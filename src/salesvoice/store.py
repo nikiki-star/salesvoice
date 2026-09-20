@@ -62,6 +62,18 @@ CREATE TABLE IF NOT EXISTS tags (
 CREATE INDEX IF NOT EXISTS idx_tags_client   ON tags(client_id, status);
 CREATE INDEX IF NOT EXISTS idx_tags_category ON tags(client_id, category);
 CREATE INDEX IF NOT EXISTS idx_meet_client   ON meetings(client_id, met_on);
+
+-- Notion 同步台账：记录每个 Notion 页面是否已入库、按内容哈希去重（幂等同步）
+CREATE TABLE IF NOT EXISTS notion_sync (
+    page_id      TEXT PRIMARY KEY,          -- Notion 页面 ID
+    client_id    TEXT DEFAULT '',
+    meeting_id   TEXT DEFAULT '',
+    title        TEXT DEFAULT '',
+    content_hash TEXT DEFAULT '',           -- 转录+音频指纹，变了才重新抽取
+    status       TEXT DEFAULT '',           -- ingested | skipped | failed
+    message      TEXT DEFAULT '',
+    synced_at    TEXT NOT NULL
+);
 """
 
 
@@ -257,6 +269,32 @@ class Store:
                ORDER BY t.confidence DESC LIMIT 50""",
             (q, q, q),
         ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------ Notion 同步台账
+
+    def notion_sync_get(self, page_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM notion_sync WHERE page_id=?", (page_id,)).fetchone()
+        return dict(row) if row else None
+
+    def notion_sync_upsert(self, page_id: str, client_id: str = "", meeting_id: str = "",
+                           title: str = "", content_hash: str = "", status: str = "",
+                           message: str = "") -> None:
+        self.conn.execute(
+            "INSERT INTO notion_sync (page_id,client_id,meeting_id,title,content_hash,"
+            "status,message,synced_at) VALUES (?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(page_id) DO UPDATE SET client_id=excluded.client_id, "
+            "meeting_id=excluded.meeting_id, title=excluded.title, "
+            "content_hash=excluded.content_hash, status=excluded.status, "
+            "message=excluded.message, synced_at=excluded.synced_at",
+            (page_id, client_id, meeting_id, title, content_hash, status, message, _now()),
+        )
+        self.conn.commit()
+
+    def notion_sync_list(self, limit: int = 20) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM notion_sync ORDER BY synced_at DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
 
     def close(self) -> None:

@@ -40,9 +40,13 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
-def _request(base: str, path: str, timeout: float = 10.0):
+def _request(base: str, path: str, timeout: float = 10.0, method: str = "GET",
+             payload: dict | None = None):
     """返回 (status, body_bytes)。HTTP 错误也返回状态码，不抛异常。"""
-    req = urllib.request.Request(base + path)
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(base + path, data=data, method=method)
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.read()
@@ -146,6 +150,27 @@ def run_checks(make_server=_Server) -> int:
                 except Exception:  # noqa: BLE001
                     good = False
             checks.append((f"{path} 返回含 {key!r} (got {status})",
+                           None if good else AssertionError(body[:200])))
+
+        # 5) Notion 集成：状态接口可用；未配置凭据时同步请求必须被明确拒绝（不能 500）
+        status, body = _request(srv.base, "/api/notion")
+        st = json.loads(body.decode()) if status == 200 else {}
+        checks.append((f"/api/notion 200 且含 has_key/ledger (got {status})",
+                       None if status == 200 and "has_key" in st and "ledger" in st
+                       else AssertionError(body[:200])))
+
+        status, body = _request(srv.base, "/api/notion/sync", method="POST",
+                                payload={})
+        try:
+            started = json.loads(body.decode())
+        except Exception:  # noqa: BLE001
+            started = {}
+        if started.get("ok"):
+            # 配了 token + 投放区的环境：请求被接受（后台线程开跑）即可
+            checks.append(("POST /api/notion/sync 已接受（后台执行）", None))
+        else:
+            good = status == 200 and bool(started.get("error"))
+            checks.append((f"未配置时 POST /api/notion/sync 给出明确原因 (got {status})",
                            None if good else AssertionError(body[:200])))
 
     failed = 0
